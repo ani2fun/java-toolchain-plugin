@@ -35,4 +35,12 @@ command to publish the plugin to your local Maven repository:
 ```
 
 This command will publish the plugin to your local Maven repository, making it available for use in other projects on
-your local environment using the same way as in `1.Apply the Plugin` section.
+your local environment using the same way as in `Apply the Plugin` section.
+
+## 3. Run VerifyJDK task "verifyJdk"
+
+Let's say you have applied this plugin in your project and want to run the task,
+
+```bash
+./gradlew :<PROJECT-NAME>:verifyJdk
+```
