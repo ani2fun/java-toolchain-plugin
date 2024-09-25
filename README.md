@@ -8,7 +8,7 @@ Follow these steps to integrate and configure the plugin for your project:
 
 ```
 plugins {
-    id("eu.kakde.gradle.java-toolchain-plugin") version "1.0.0"
+    id("eu.kakde.gradle.java-toolchain-plugin") version "1.0.1"
 }
 ```
 
