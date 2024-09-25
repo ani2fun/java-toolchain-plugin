@@ -45,4 +45,7 @@ java {
 
 dependencies {
     implementation(gradleApi())
+    implementation("org.jetbrains.kotlin:kotlin-reflect")
+    implementation("org.jetbrains.kotlin:kotlin-gradle-plugin")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
 }

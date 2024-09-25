@@ -42,5 +42,5 @@ your local environment using the same way as in `Apply the Plugin` section.
 Let's say you have applied this plugin in your project and want to run the task,
 
 ```bash
-./gradlew :<PROJECT-NAME>:verifyJdk
+./gradlew :<PROJECT-NAME>:verifyJdkForCompiledClasses
 ```

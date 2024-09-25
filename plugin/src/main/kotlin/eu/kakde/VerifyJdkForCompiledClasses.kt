@@ -9,7 +9,7 @@ import org.gradle.jvm.toolchain.JvmVendorSpec
 import java.io.File
 import java.io.FileInputStream
 
-abstract class VerifyJDKTask : DefaultTask() {
+abstract class VerifyJdkForCompiledClasses : DefaultTask() {
     // List of allowed Java major versions and vendors
     // Java 17 -> 61, Java 21 -> 65
     private val allowedVersions = listOf(61, 65)
@@ -18,9 +18,6 @@ abstract class VerifyJDKTask : DefaultTask() {
     init {
         group = CUSTOM_GROUP
         description = "Verifies the Java toolchain configuration and compiled class files."
-
-        // Ensure this task runs after compilation tasks
-        dependsOn("classes", "testClasses")
     }
 
     @TaskAction
