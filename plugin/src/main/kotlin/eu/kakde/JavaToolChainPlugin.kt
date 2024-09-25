@@ -13,13 +13,12 @@ import java.util.Locale
 
 val CUSTOM_GROUP = "Toolchain Verification Task"
 
-open class JavaToolchainExtension {
+open class JavaToolchainExtension(
     // Default values for the JDK version and vendor
-    var version: Int = 21
-
+    var version: Int = 21,
     // "amazon" | "amazon corretto" | "adoptium" | "temurin" | "eclipse" | "eclipse temurin"
-    var vendor: String = "Amazon Corretto"
-}
+    var vendor: String = "Amazon Corretto",
+)
 
 class JavaToolChainPlugin : Plugin<Project> {
     override fun apply(project: Project) {
@@ -31,7 +30,7 @@ class JavaToolChainPlugin : Plugin<Project> {
             println("Java Toolchain Config: version=${extension.version}, vendor=${extension.vendor}")
             configureJavaToolchain(project, extension)
             configureKotlinToolchain(project, extension)
-            project.tasks.register("verifyJdkForCompiledClasses", VerifyJdkForCompiledClasses::class.java)
+            project.tasks.register("checkMajorJavaVersionForCompiledClasses", CheckVersionForCompiledClasses::class.java)
         }
     }
 

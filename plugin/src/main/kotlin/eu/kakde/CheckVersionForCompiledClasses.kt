@@ -9,7 +9,7 @@ import org.gradle.jvm.toolchain.JvmVendorSpec
 import java.io.File
 import java.io.FileInputStream
 
-abstract class VerifyJdkForCompiledClasses : DefaultTask() {
+abstract class CheckVersionForCompiledClasses : DefaultTask() {
     // List of allowed Java major versions and vendors
     // Java 17 -> 61, Java 21 -> 65
     private val allowedVersions = listOf(61, 65)
@@ -21,52 +21,17 @@ abstract class VerifyJdkForCompiledClasses : DefaultTask() {
     }
 
     @TaskAction
-    fun verifyJDK() {
-        // Step 1: Verify the Java Toolchain
-        val actualToolchain = getActualToolchainMetadata()
-        displayToolchainInfo(actualToolchain)
-
-        // Step 2: Print class directories for verification
+    fun checkJavaVersion() {
         val sourceSets = project.extensions.getByName("sourceSets") as SourceSetContainer
         val classDirs = sourceSets.flatMap { it.output.classesDirs.files }
         println("Class directories being checked: ")
         classDirs.forEach { println(it.absolutePath) }
 
         // Step 3: Verify the compiled class files
-        verifyCompiledClasses(actualToolchain, classDirs)
+        verifyCompiledClasses(classDirs)
     }
 
-    private fun getActualToolchainMetadata(): ToolchainMetadata {
-        val toolchainService =
-            project.extensions.findByType(JavaToolchainService::class.java)
-                ?: throw IllegalStateException("Java Toolchain Service is not available in this project.")
-
-        val javaLauncher =
-            toolchainService
-                .launcherFor {
-                    it.languageVersion.set(JavaLanguageVersion.of(getConfiguredJavaVersion()))
-                    it.vendor.set(JvmVendorSpec.matching(getConfiguredJavaVendor()))
-                }.get()
-
-        return ToolchainMetadata(
-            vendor = javaLauncher.metadata.vendor.toString(),
-            version = javaLauncher.metadata.languageVersion.asInt(),
-        )
-    }
-
-    private fun getConfiguredJavaVersion(): Int = project.extensions.getByType(JavaToolchainExtension::class.java).version
-
-    private fun getConfiguredJavaVendor(): String = project.extensions.getByType(JavaToolchainExtension::class.java).vendor
-
-    private fun displayToolchainInfo(toolchain: ToolchainMetadata) {
-        println("Vendor used for compiling the code: ${toolchain.vendor}")
-        println("Java version used for compiling the code: ${toolchain.version}")
-    }
-
-    private fun verifyCompiledClasses(
-        actualToolchain: ToolchainMetadata,
-        classDirs: Collection<File>,
-    ) {
+    private fun verifyCompiledClasses(classDirs: Collection<File>) {
         // Recursively find all .class files in the provided directories
         val classFiles = classDirs.flatMap { findAllClassFiles(it) }
 
@@ -75,28 +40,24 @@ abstract class VerifyJdkForCompiledClasses : DefaultTask() {
 
         classFiles.forEach { classFile ->
             totalFilesChecked++
-            val classFileVersion = getClassFileVersion(classFile)
 
+            val classFileVersion = getClassFileVersion(classFile)
             // Check if the class file uses allowed Java versions and vendors
-            if (!isVersionAllowed(classFileVersion) || !isVendorAllowed(actualToolchain.vendor)) {
+            if (!isVersionAllowed(classFileVersion) || !isVendorAllowed(getToolChainExtensionData().vendor)) {
+                println(
+                    """
+                    [ERROR] The Java version of the compiled class file '${classFile.name}' is $classFileVersion,
+                    which does not match any of the allowed versions.
+                    """.trimIndent(),
+                )
                 invalidClassFiles.add(classFile.name)
+            } else {
+                println("Java version for compiled class file - ${classFile.name} is $classFileVersion.")
             }
         }
 
         // Print a summary
         printSummary(totalFilesChecked, invalidClassFiles)
-    }
-
-    private fun isVersionAllowed(version: Int): Boolean = allowedVersions.contains(version)
-
-    private fun isVendorAllowed(vendor: String): Boolean = allowedVendors.any { vendor.contains(it, ignoreCase = true) }
-
-    private fun getClassFileVersion(classFile: File): Int {
-        FileInputStream(classFile).use { input ->
-            val bytes = ByteArray(8)
-            input.read(bytes)
-            return ((bytes[6].toInt() and 0xFF) shl 8) + (bytes[7].toInt() and 0xFF)
-        }
     }
 
     private fun findAllClassFiles(directory: File): List<File> {
@@ -109,6 +70,43 @@ abstract class VerifyJdkForCompiledClasses : DefaultTask() {
         } else {
             emptyList()
         }
+    }
+
+    private fun getClassFileVersion(classFile: File): Int {
+        FileInputStream(classFile).use { input ->
+            val bytes = ByteArray(8)
+            input.read(bytes)
+            return ((bytes[6].toInt() and 0xFF) shl 8) + (bytes[7].toInt() and 0xFF)
+        }
+    }
+
+    private fun isVersionAllowed(version: Int): Boolean = allowedVersions.contains(version)
+
+    private fun isVendorAllowed(vendor: String): Boolean = allowedVendors.any { vendor.contains(it, ignoreCase = true) }
+
+    private fun getToolChainExtensionData(): JavaToolchainExtension {
+        // Toolchain Service
+        val toolchainService =
+            project.extensions.findByType(JavaToolchainService::class.java)
+                ?: throw IllegalStateException("Java Toolchain Service is not available in this project.")
+
+        // Toolchain Extension data
+        val javaToolChainExtension = project.extensions.getByType(JavaToolchainExtension::class.java)
+
+        val javaLauncher =
+            toolchainService
+                .launcherFor {
+                    // Setting the launcherFor. (This is not compilerFor)
+                    it.languageVersion.set(
+                        JavaLanguageVersion.of(javaToolChainExtension.version),
+                    )
+                    it.vendor.set(JvmVendorSpec.matching(javaToolChainExtension.vendor))
+                }.get()
+
+        return JavaToolchainExtension(
+            vendor = javaLauncher.metadata.vendor.toString(),
+            version = javaLauncher.metadata.languageVersion.asInt(),
+        )
     }
 
     private fun printSummary(
@@ -130,9 +128,4 @@ abstract class VerifyJdkForCompiledClasses : DefaultTask() {
             }
         }
     }
-
-    private data class ToolchainMetadata(
-        val vendor: String,
-        val version: Int,
-    )
 }

@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "eu.kakde.gradle"
-version = "1.0.1"
+version = "1.0.3"
 
 gradlePlugin {
     website = "https://github.com/ani2fun/java-toolchain-plugin.git"
