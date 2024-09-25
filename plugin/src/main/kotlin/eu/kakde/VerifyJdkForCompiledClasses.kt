@@ -1,23 +1,26 @@
 package eu.kakde
 
 import org.gradle.api.DefaultTask
+import org.gradle.api.tasks.SourceSetContainer
 import org.gradle.api.tasks.TaskAction
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.jvm.toolchain.JavaToolchainService
+import org.gradle.jvm.toolchain.JvmVendorSpec
 import java.io.File
 import java.io.FileInputStream
 
 abstract class VerifyJDKTask : DefaultTask() {
-    // https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html
     // List of allowed Java major versions and vendors
     // Java 17 -> 61, Java 21 -> 65
     private val allowedVersions = listOf(61, 65)
-
     private val allowedVendors = listOf("amazon corretto", "adoptium", "temurin", "eclipse", "eclipse temurin")
 
     init {
         group = CUSTOM_GROUP
         description = "Verifies the Java toolchain configuration and compiled class files."
+
+        // Ensure this task runs after compilation tasks
+        dependsOn("classes", "testClasses")
     }
 
     @TaskAction
@@ -26,8 +29,14 @@ abstract class VerifyJDKTask : DefaultTask() {
         val actualToolchain = getActualToolchainMetadata()
         displayToolchainInfo(actualToolchain)
 
-        // Step 2: Verify the compiled class files
-        verifyCompiledClasses(actualToolchain)
+        // Step 2: Print class directories for verification
+        val sourceSets = project.extensions.getByName("sourceSets") as SourceSetContainer
+        val classDirs = sourceSets.flatMap { it.output.classesDirs.files }
+        println("Class directories being checked: ")
+        classDirs.forEach { println(it.absolutePath) }
+
+        // Step 3: Verify the compiled class files
+        verifyCompiledClasses(actualToolchain, classDirs)
     }
 
     private fun getActualToolchainMetadata(): ToolchainMetadata {
@@ -39,6 +48,7 @@ abstract class VerifyJDKTask : DefaultTask() {
             toolchainService
                 .launcherFor {
                     it.languageVersion.set(JavaLanguageVersion.of(getConfiguredJavaVersion()))
+                    it.vendor.set(JvmVendorSpec.matching(getConfiguredJavaVendor()))
                 }.get()
 
         return ToolchainMetadata(
@@ -49,13 +59,19 @@ abstract class VerifyJDKTask : DefaultTask() {
 
     private fun getConfiguredJavaVersion(): Int = project.extensions.getByType(JavaToolchainExtension::class.java).version
 
+    private fun getConfiguredJavaVendor(): String = project.extensions.getByType(JavaToolchainExtension::class.java).vendor
+
     private fun displayToolchainInfo(toolchain: ToolchainMetadata) {
         println("Vendor used for compiling the code: ${toolchain.vendor}")
         println("Java version used for compiling the code: ${toolchain.version}")
     }
 
-    private fun verifyCompiledClasses(actualToolchain: ToolchainMetadata) {
-        val classFiles = project.fileTree(mapOf("dir" to "build/classes", "includes" to listOf("**/*.class")))
+    private fun verifyCompiledClasses(
+        actualToolchain: ToolchainMetadata,
+        classDirs: Collection<File>,
+    ) {
+        // Recursively find all .class files in the provided directories
+        val classFiles = classDirs.flatMap { findAllClassFiles(it) }
 
         var totalFilesChecked = 0
         val invalidClassFiles = mutableListOf<String>()
@@ -83,6 +99,18 @@ abstract class VerifyJDKTask : DefaultTask() {
             val bytes = ByteArray(8)
             input.read(bytes)
             return ((bytes[6].toInt() and 0xFF) shl 8) + (bytes[7].toInt() and 0xFF)
+        }
+    }
+
+    private fun findAllClassFiles(directory: File): List<File> {
+        // Recursively find all class files in subdirectories
+        return if (directory.exists()) {
+            directory
+                .walkTopDown()
+                .filter { it.extension == "class" }
+                .toList()
+        } else {
+            emptyList()
         }
     }
 
